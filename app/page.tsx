@@ -107,3 +107,30 @@ export default function Home() {
                 >
                   {c.label}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 font-medium">摘要說明</label>
+            <textarea
+              value={summary}
+              onChange={e => setSummary(e.target.value)}
+              placeholder="請簡述費用用途"
+              rows={3}
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full bg-blue-500 text-white rounded-lg py-3 text-sm font-medium hover:bg-blue-600 transition disabled:opacity-50"
+          >
+            {loading ? '送出中...' : '送出申請'}
+          </button>
+        </div>
+      </div>
+    </main>
+  )
+}
