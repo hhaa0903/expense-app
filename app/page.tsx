@@ -1,18 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
-
-type Expense = {
-  id: string
-  amount: number
-  expense_date: string
-  category: string
-  summary: string
-  status: string
-  submitted_at: string
-  erp_ref_no: string | null
-}
+import { useState } from 'react'
+import { useSession, signIn } from 'next-auth/react'
+import { supabase } from '../lib/supabase'
 
 const categoryMap: Record<string, string> = {
   transport: '交通',
@@ -22,169 +12,180 @@ const categoryMap: Record<string, string> = {
   other: '其他',
 }
 
-const ADMIN_PASSWORD = 'expense2024'
+export default function Home() {
+  const { data: session, status } = useSession()
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState('')
+  const [category, setCategory] = useState('transport')
+  const [summary, setSummary] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
-export default function AdminPage() {
-  const [authed, setAuthed] = useState(false)
-  const [inputPw, setInputPw] = useState('')
-  const [pwError, setPwError] = useState(false)
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [loading, setLoading] = useState(true)
-  const [erpRef, setErpRef] = useState<Record<string, string>>({})
-
-  const handleLogin = () => {
-    if (inputPw === ADMIN_PASSWORD) {
-      setAuthed(true)
-      setPwError(false)
-    } else {
-      setPwError(true)
-    }
+  if (status === 'loading') {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-400 text-sm">載入中...</p>
+      </main>
+    )
   }
 
-  const fetchExpenses = async () => {
-    const { data } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('submitted_at', { ascending: false })
-    setExpenses(data || [])
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    if (authed) fetchExpenses()
-  }, [authed])
-
-  const markAccounted = async (id: string) => {
-    const ref = erpRef[id] || ''
-    const { error } = await supabase
-      .from('expenses')
-      .update({
-        status: 'accounted',
-        erp_ref_no: ref,
-        accounted_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-    if (error) {
-      alert('更新失敗：' + error.message)
-    } else {
-      fetchExpenses()
-    }
-  }
-
-  if (!authed) {
+  if (!session) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-md w-full max-w-sm p-6">
-          <h1 className="text-xl font-bold text-gray-800 mb-1">記帳人員後台</h1>
-          <p className="text-sm text-gray-400 mb-6">請輸入管理密碼</p>
-          <input
-            type="password"
-            value={inputPw}
-            onChange={e => setInputPw(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleLogin()}
-            placeholder="輸入密碼"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
-          {pwError && <p className="text-red-500 text-xs mb-3">密碼錯誤，請再試一次</p>}
+        <div className="bg-white rounded-2xl shadow-md w-full max-w-sm p-6 text-center">
+          <h1 className="text-xl font-bold text-gray-800 mb-2">費用申請系統</h1>
+          <p className="text-sm text-gray-400 mb-6">請先用 LINE 登入</p>
           <button
-            onClick={handleLogin}
-            className="w-full bg-blue-500 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-600 transition"
+            onClick={() => signIn('line')}
+            className="w-full bg-green-500 text-white rounded-lg py-3 text-sm font-medium hover:bg-green-600 transition"
           >
-            登入
+            使用 LINE 登入
           </button>
         </div>
       </main>
     )
   }
 
-  const pending = expenses.filter(e => e.status === 'submitted')
-  const accounted = expenses.filter(e => e.status === 'accounted')
+  const handleSubmit = async () => {
+    if (!amount || !date || !summary) {
+      alert('請填寫所有欄位')
+      return
+    }
+    setLoading(true)
+
+    const lineUserId = (session.user as any).id
+
+    let userId = null
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('line_user_id', lineUserId)
+      .single()
+
+    if (existingUser) {
+      userId = existingUser.id
+    } else {
+      const { data: newUser } = await supabase
+        .from('users')
+        .insert({
+          name: session.user?.name || '未知用戶',
+          email: session.user?.email || `${lineUserId}@line.user`,
+          role: 'submitter',
+          line_user_id: lineUserId,
+        })
+        .select('id')
+        .single()
+      userId = newUser?.id
+    }
+
+    const { error } = await supabase.from('expenses').insert({
+      submitter_id: userId,
+      amount: parseFloat(amount),
+      expense_date: date,
+      category,
+      summary,
+      status: 'submitted',
+    })
+
+    if (error) {
+      alert('送出失敗：' + error.message)
+    } else {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `📋 新費用申請\n申請人：${session.user?.name}\n類別：${categoryMap[category]}\n金額：NT$${amount}\n日期：${date}\n摘要：${summary}\n\n請至後台確認：https://expense-app-iota-gilt.vercel.app/admin`,
+        }),
+      })
+      setSuccess(true)
+      setAmount('')
+      setDate('')
+      setSummary('')
+    }
+    setLoading(false)
+  }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">記帳人員後台</h1>
-        <p className="text-sm text-gray-400 mb-6">管理所有費用申請</p>
-
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-orange-50 rounded-xl p-4">
-            <p className="text-xs text-orange-500 font-medium">待入帳</p>
-            <p className="text-3xl font-bold text-orange-500">{pending.length}</p>
-          </div>
-          <div className="bg-green-50 rounded-xl p-4">
-            <p className="text-xs text-green-500 font-medium">已入帳</p>
-            <p className="text-3xl font-bold text-green-500">{accounted.length}</p>
-          </div>
-          <div className="bg-gray-100 rounded-xl p-4">
-            <p className="text-xs text-gray-500 font-medium">未入帳金額</p>
-            <p className="text-xl font-bold text-gray-700">
-              NT${pending.reduce((s, e) => s + Number(e.amount), 0).toLocaleString()}
-            </p>
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-md w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">費用申請</h1>
+            <p className="text-xs text-gray-400">{session.user?.name}</p>
           </div>
         </div>
 
-        <h2 className="text-sm font-semibold text-gray-500 mb-3">待入帳</h2>
-        <div className="space-y-3 mb-8">
-          {loading && <p className="text-sm text-gray-400">載入中...</p>}
-          {!loading && pending.length === 0 && (
-            <p className="text-sm text-gray-400">目前沒有待入帳項目 🎉</p>
-          )}
-          {pending.map(e => (
-            <div key={e.id} className="bg-white rounded-xl border border-orange-100 p-4">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <span className="text-sm font-medium text-gray-800">
-                    {categoryMap[e.category]}
-                  </span>
-                  <span className="text-xs text-gray-400 ml-2">{e.expense_date}</span>
-                </div>
-                <span className="text-lg font-bold text-orange-500">
-                  NT${Number(e.amount).toLocaleString()}
-                </span>
-              </div>
-              <p className="text-sm text-gray-500 mb-3">{e.summary}</p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="ERP 傳票編號（選填）"
-                  value={erpRef[e.id] || ''}
-                  onChange={ev => setErpRef(prev => ({ ...prev, [e.id]: ev.target.value }))}
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                />
+        {success && (
+          <div className="bg-green-50 text-green-700 rounded-lg p-3 mb-4 text-sm">
+            ✅ 申請已送出！
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-600 font-medium">金額（NT$）</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              placeholder="請輸入金額"
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 font-medium">費用日期</label>
+            <input
+              type="date"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-600 font-medium">費用類別</label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
+                { value: 'transport', label: '交通' },
+                { value: 'meal', label: '餐費' },
+                { value: 'accommodation', label: '住宿' },
+                { value: 'supplies', label: '文具' },
+                { value: 'other', label: '其他' },
+              ].map(c => (
                 <button
-                  onClick={() => markAccounted(e.id)}
-                  className="bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 transition"
+                  key={c.value}
+                  onClick={() => setCategory(c.value)}
+                  className={`px-3 py-1 rounded-full text-sm border transition ${
+                    category === c.value
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white text-gray-500 border-gray-200'
+                  }`}
                 >
-                  ✓ 已入帳
+                  {c.label}
                 </button>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
 
-        <h2 className="text-sm font-semibold text-gray-500 mb-3">已入帳</h2>
-        <div className="space-y-2">
-          {accounted.map(e => (
-            <div key={e.id} className="bg-white rounded-xl border border-gray-100 p-4 opacity-60">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">
-                    {categoryMap[e.category]}
-                  </span>
-                  <span className="text-xs text-gray-400 ml-2">{e.expense_date}</span>
-                  <span className="text-xs text-gray-400 ml-2">{e.summary}</span>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-gray-600">
-                    NT${Number(e.amount).toLocaleString()}
-                  </p>
-                  {e.erp_ref_no && (
-                    <p className="text-xs text-green-500">#{e.erp_ref_no}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+          <div>
+            <label className="text-sm text-gray-600 font-medium">摘要說明</label>
+            <textarea
+              value={summary}
+              onChange={e => setSummary(e.target.value)}
+              placeholder="請簡述費用用途"
+              rows={3}
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full bg-blue-500 text-white rounded-lg py-3 text-sm font-medium hover:bg-blue-600 transition disabled:opacity-50"
+          >
+            {loading ? '送出中...' : '送出申請'}
+          </button>
         </div>
       </div>
     </main>
