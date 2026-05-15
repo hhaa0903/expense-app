@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession, signIn } from 'next-auth/react'
 import { supabase } from '../lib/supabase'
 
 const categoryMap: Record<string, string> = {
@@ -12,6 +13,7 @@ const categoryMap: Record<string, string> = {
 }
 
 export default function Home() {
+  const { data: session, status } = useSession()
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState('')
   const [category, setCategory] = useState('transport')
@@ -19,14 +21,65 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
 
+  if (status === 'loading') {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-400 text-sm">載入中...</p>
+      </main>
+    )
+  }
+
+  if (!session) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-md w-full max-w-sm p-6 text-center">
+          <h1 className="text-xl font-bold text-gray-800 mb-2">費用申請系統</h1>
+          <p className="text-sm text-gray-400 mb-6">請先用 LINE 登入</p>
+          <button
+            onClick={() => signIn('line')}
+            className="w-full bg-green-500 text-white rounded-lg py-3 text-sm font-medium hover:bg-green-600 transition"
+          >
+            使用 LINE 登入
+          </button>
+        </div>
+      </main>
+    )
+  }
+
   const handleSubmit = async () => {
     if (!amount || !date || !summary) {
       alert('請填寫所有欄位')
       return
     }
     setLoading(true)
+
+    const lineUserId = (session.user as any).id
+
+    let userId = null
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('line_user_id', lineUserId)
+      .single()
+
+    if (existingUser) {
+      userId = existingUser.id
+    } else {
+      const { data: newUser } = await supabase
+        .from('users')
+        .insert({
+          name: session.user?.name || '未知用戶',
+          email: session.user?.email || `${lineUserId}@line.user`,
+          role: 'submitter',
+          line_user_id: lineUserId,
+        })
+        .select('id')
+        .single()
+      userId = newUser?.id
+    }
+
     const { error } = await supabase.from('expenses').insert({
-      submitter_id: '00000000-0000-0000-0000-000000000001',
+      submitter_id: userId,
       amount: parseFloat(amount),
       expense_date: date,
       category,
@@ -41,7 +94,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `📋 新費用申請\n類別：${categoryMap[category]}\n金額：NT$${amount}\n日期：${date}\n摘要：${summary}\n\n請至後台確認：https://expense-app-iota-gilt.vercel.app/admin`,
+          message: `📋 新費用申請\n申請人：${session.user?.name}\n類別：${categoryMap[category]}\n金額：NT$${amount}\n日期：${date}\n摘要：${summary}\n\n請至後台確認：https://expense-app-iota-gilt.vercel.app/admin`,
         }),
       })
       setSuccess(true)
@@ -55,8 +108,12 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-md w-full max-w-md p-6">
-        <h1 className="text-xl font-bold text-gray-800 mb-1">費用申請</h1>
-        <p className="text-sm text-gray-400 mb-6">填寫完畢後點選送出</p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">費用申請</h1>
+            <p className="text-xs text-gray-400">{session.user?.name}</p>
+          </div>
+        </div>
 
         {success && (
           <div className="bg-green-50 text-green-700 rounded-lg p-3 mb-4 text-sm">
