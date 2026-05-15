@@ -22,10 +22,24 @@ const categoryMap: Record<string, string> = {
   other: '其他',
 }
 
+const ADMIN_PASSWORD = 'expense2024'
+
 export default function AdminPage() {
+  const [authed, setAuthed] = useState(false)
+  const [inputPw, setInputPw] = useState('')
+  const [pwError, setPwError] = useState(false)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [erpRef, setErpRef] = useState<Record<string, string>>({})
+
+  const handleLogin = () => {
+    if (inputPw === ADMIN_PASSWORD) {
+      setAuthed(true)
+      setPwError(false)
+    } else {
+      setPwError(true)
+    }
+  }
 
   const fetchExpenses = async () => {
     const { data } = await supabase
@@ -37,8 +51,8 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    fetchExpenses()
-  }, [])
+    if (authed) fetchExpenses()
+  }, [authed])
 
   const markAccounted = async (id: string) => {
     const ref = erpRef[id] || ''
@@ -55,6 +69,32 @@ export default function AdminPage() {
     } else {
       fetchExpenses()
     }
+  }
+
+  if (!authed) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-md w-full max-w-sm p-6">
+          <h1 className="text-xl font-bold text-gray-800 mb-1">記帳人員後台</h1>
+          <p className="text-sm text-gray-400 mb-6">請輸入管理密碼</p>
+          <input
+            type="password"
+            value={inputPw}
+            onChange={e => setInputPw(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogin()}
+            placeholder="輸入密碼"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+          {pwError && <p className="text-red-500 text-xs mb-3">密碼錯誤，請再試一次</p>}
+          <button
+            onClick={handleLogin}
+            className="w-full bg-blue-500 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-600 transition"
+          >
+            登入
+          </button>
+        </div>
+      </main>
+    )
   }
 
   const pending = expenses.filter(e => e.status === 'submitted')
