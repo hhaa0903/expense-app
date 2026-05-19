@@ -242,7 +242,6 @@ export default function Home() {
         {tab === 'form' && (
           <div className="bg-white rounded-2xl shadow-sm p-5">
 
-            {/* 申請類型切換 */}
             <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
               <button
                 onClick={() => setFormType('expense')}
@@ -346,7 +345,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* 收據照片 */}
               <div>
                 <label className="text-sm text-gray-600 font-medium">收據照片（選填）</label>
                 <div
