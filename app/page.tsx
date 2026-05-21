@@ -41,7 +41,7 @@ type TabType = 'form' | 'history'
 type FormType = 'expense' | 'collection' | 'overtime' | 'leave'
 
 const currentYear = new Date().getFullYear()
-const years = Array.from({ length: 4 }, (_, i) => currentYear - 1 + i)
+const years = Array.from({ length: 6 }, (_, i) => currentYear - 1 + i)
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
