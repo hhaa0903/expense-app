@@ -276,6 +276,8 @@ export default function Home() {
 
   const isAttendanceForm = formType === 'overtime' || formType === 'leave'
 
+  const dateInputClass = "mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+
   return (
     <main className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto">
@@ -311,7 +313,7 @@ export default function Home() {
         {tab === 'form' && (
           <div className="bg-white rounded-2xl shadow-sm p-5">
 
-            {/* 申請類型：2x2 格局 */}
+            {/* 申請類型：2x2 */}
             <div className="grid grid-cols-2 gap-2 mb-5">
               {([
                 { value: 'expense', label: '💸 費用申請', active: 'text-blue-600' },
@@ -408,7 +410,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 日期 */}
+              {/* 日期 — 修正手機相容性 */}
               <div>
                 <label className="text-sm text-gray-600 font-medium">
                   {formType === 'expense' ? '費用日期'
@@ -420,7 +422,9 @@ export default function Home() {
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  min="2020-01-01"
+                  max="2099-12-31"
+                  className={dateInputClass}
                 />
               </div>
 
@@ -473,7 +477,7 @@ export default function Home() {
                 />
               </div>
 
-              {/* 收據照片（費用/代收才顯示） */}
+              {/* 收據照片 */}
               {!isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">收據照片（選填）</label>
@@ -564,9 +568,7 @@ export default function Home() {
                     <p className="text-sm text-gray-500 mb-2">{e.summary}</p>
                     <div className="flex justify-between items-center">
                       {isAttendance ? (
-                        <span className="text-base font-bold text-gray-700">
-                          {e.hours}小時
-                        </span>
+                        <span className="text-base font-bold text-gray-700">{e.hours} 小時</span>
                       ) : (
                         <span className="text-base font-bold text-gray-700">
                           NT${Number(e.amount).toLocaleString()}
@@ -578,7 +580,7 @@ export default function Home() {
                     </div>
                     {e.receipt_url && (
                       
-                        <a href={e.receipt_url}
+                        href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
