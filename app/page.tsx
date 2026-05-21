@@ -40,6 +40,10 @@ type Expense = {
 type TabType = 'form' | 'history'
 type FormType = 'expense' | 'collection' | 'overtime' | 'leave'
 
+const years = Array.from({ length: 6 }, (_, i) => 2023 + i)
+const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
+const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+
 export default function Home() {
   const { data: session, status } = useSession()
 
@@ -47,7 +51,9 @@ export default function Home() {
   const [formType, setFormType] = useState<FormType>('expense')
 
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState('')
+  const [dateY, setDateY] = useState('')
+  const [dateM, setDateM] = useState('')
+  const [dateD, setDateD] = useState('')
   const [category, setCategory] = useState('transport')
   const [summary, setSummary] = useState('')
   const [payerName, setPayerName] = useState('')
@@ -63,6 +69,9 @@ export default function Home() {
 
   const [history, setHistory] = useState<Expense[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  const getDateString = () =>
+    dateY && dateM && dateD ? `${dateY}-${dateM}-${dateD}` : ''
 
   const getUserId = async () => {
     const lineUserId = (session!.user as any).id
@@ -120,7 +129,9 @@ export default function Home() {
 
   const resetForm = () => {
     setAmount('')
-    setDate('')
+    setDateY('')
+    setDateM('')
+    setDateD('')
     setSummary('')
     setPayerName('')
     setHours('')
@@ -131,6 +142,7 @@ export default function Home() {
 
   const handleSubmit = async () => {
     const isAttendance = formType === 'overtime' || formType === 'leave'
+    const date = getDateString()
 
     if (!date || !summary) {
       alert('請填寫所有欄位')
@@ -267,7 +279,7 @@ export default function Home() {
     leave: '🏖️',
   }
 
-  const typeLabel: Record<string, string> = {
+  const typeLabelMap: Record<string, string> = {
     expense: '費用申請',
     collection: '代收款項',
     overtime: '加班申請',
@@ -276,7 +288,7 @@ export default function Home() {
 
   const isAttendanceForm = formType === 'overtime' || formType === 'leave'
 
-  const dateInputClass = "mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+  const selectClass = "flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
 
   return (
     <main className="min-h-screen bg-gray-50 p-4">
@@ -289,7 +301,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 頁籤 */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
           <button
             onClick={() => setTab('form')}
@@ -309,11 +320,9 @@ export default function Home() {
           </button>
         </div>
 
-        {/* ── 填單 ── */}
         {tab === 'form' && (
           <div className="bg-white rounded-2xl shadow-sm p-5">
 
-            {/* 申請類型：2x2 */}
             <div className="grid grid-cols-2 gap-2 mb-5">
               {([
                 { value: 'expense', label: '💸 費用申請', active: 'text-blue-600' },
@@ -343,7 +352,6 @@ export default function Home() {
 
             <div className="space-y-4">
 
-              {/* 代收：付款人 */}
               {formType === 'collection' && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">付款人姓名</label>
@@ -357,7 +365,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 請假：假別 */}
               {formType === 'leave' && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">假別</label>
@@ -379,7 +386,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 金額（費用/代收） */}
               {!isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">金額（NT$）</label>
@@ -393,7 +399,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 時數（加班/請假） */}
               {isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">
@@ -410,7 +415,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 日期 — 修正手機相容性 */}
+              {/* 日期：三個下拉選單，手機相容 */}
               <div>
                 <label className="text-sm text-gray-600 font-medium">
                   {formType === 'expense' ? '費用日期'
@@ -418,17 +423,22 @@ export default function Home() {
                     : formType === 'overtime' ? '加班日期'
                     : '請假日期'}
                 </label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  min="2020-01-01"
-                  max="2099-12-31"
-                  className={dateInputClass}
-                />
+                <div className="flex gap-2 mt-1">
+                  <select value={dateY} onChange={e => setDateY(e.target.value)} className={selectClass}>
+                    <option value="">年</option>
+                    {years.map(y => <option key={y} value={String(y)}>{y}</option>)}
+                  </select>
+                  <select value={dateM} onChange={e => setDateM(e.target.value)} className={selectClass}>
+                    <option value="">月</option>
+                    {months.map(m => <option key={m} value={m}>{Number(m)}月</option>)}
+                  </select>
+                  <select value={dateD} onChange={e => setDateD(e.target.value)} className={selectClass}>
+                    <option value="">日</option>
+                    {days.map(d => <option key={d} value={d}>{Number(d)}日</option>)}
+                  </select>
+                </div>
               </div>
 
-              {/* 費用類別 */}
               {formType === 'expense' && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">費用類別</label>
@@ -458,7 +468,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* 摘要 */}
               <div>
                 <label className="text-sm text-gray-600 font-medium">
                   {isAttendanceForm ? '事由說明' : '摘要說明'}
@@ -477,7 +486,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* 收據照片 */}
               {!isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">收據照片（選填）</label>
@@ -535,7 +543,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── 我的記錄 ── */}
         {tab === 'history' && (
           <div>
             {historyLoading && (
@@ -554,7 +561,7 @@ export default function Home() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{typeIcon[e.type] || '📄'}</span>
                         <span className="text-sm font-medium text-gray-800">
-                          {typeLabel[e.type] || e.type}
+                          {typeLabelMap[e.type] || e.type}
                           {e.type === 'collection' && ` ・${e.payer_name}`}
                           {e.type === 'expense' && ` ・${categoryMap[e.category] || e.category}`}
                           {e.type === 'leave' && e.leave_type && ` ・${leaveTypeMap[e.leave_type]}`}
@@ -580,7 +587,7 @@ export default function Home() {
                     </div>
                     {e.receipt_url && (
                       
-                        <a href={e.receipt_url}
+                       <a href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
