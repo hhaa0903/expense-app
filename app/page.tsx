@@ -39,9 +39,10 @@ type Expense = {
 
 type TabType = 'form' | 'history'
 type FormType = 'expense' | 'collection' | 'overtime' | 'leave'
+type HoursUnit = 'hours' | 'days'
 
 const currentYear = new Date().getFullYear()
-const years = Array.from({ length: 6 }, (_, i) => currentYear - 1 + i)
+const years = [currentYear, currentYear + 1]
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
@@ -54,52 +55,36 @@ function DatePicker({
   onMonthChange: (m: number) => void,
   onDayChange: (d: number) => void,
 }) {
-  const btnBase = "px-2 py-1.5 rounded-lg text-sm border transition text-center"
+  const btnBase = "py-1.5 rounded-lg text-sm border transition text-center"
   const active = "bg-blue-500 text-white border-blue-500"
   const inactive = "bg-white text-gray-600 border-gray-200"
 
   return (
     <div className="space-y-2 mt-1">
-      {/* 年 */}
-      <div className="flex gap-1.5 flex-wrap">
+      <div className="flex gap-2">
         {years.map(y => (
-          <button
-            key={y}
-            type="button"
-            onClick={() => onYearChange(y)}
-            className={`${btnBase} flex-1 ${year === y ? active : inactive}`}
-          >
-            {y}
+          <button key={y} type="button" onClick={() => onYearChange(y)}
+            className={`${btnBase} flex-1 ${year === y ? active : inactive}`}>
+            {y}年
           </button>
         ))}
       </div>
-      {/* 月 */}
       <div className="grid grid-cols-6 gap-1.5">
         {months.map(m => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => onMonthChange(m)}
-            className={`${btnBase} ${month === m ? active : inactive}`}
-          >
+          <button key={m} type="button" onClick={() => onMonthChange(m)}
+            className={`${btnBase} ${month === m ? active : inactive}`}>
             {m}月
           </button>
         ))}
       </div>
-      {/* 日 */}
       <div className="grid grid-cols-7 gap-1">
         {days.map(d => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => onDayChange(d)}
-            className={`${btnBase} text-xs ${day === d ? active : inactive}`}
-          >
+          <button key={d} type="button" onClick={() => onDayChange(d)}
+            className={`${btnBase} text-xs ${day === d ? active : inactive}`}>
             {d}
           </button>
         ))}
       </div>
-      {/* 已選結果 */}
       {year && month && day && (
         <p className="text-sm text-blue-600 font-medium">
           ✓ {year} 年 {month} 月 {day} 日
@@ -123,6 +108,7 @@ export default function Home() {
   const [summary, setSummary] = useState('')
   const [payerName, setPayerName] = useState('')
   const [hours, setHours] = useState('')
+  const [hoursUnit, setHoursUnit] = useState<HoursUnit>('hours')
   const [leaveType, setLeaveType] = useState('annual')
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
@@ -138,6 +124,12 @@ export default function Home() {
   const getDateString = () => {
     if (!dateY || !dateM || !dateD) return ''
     return `${dateY}-${String(dateM).padStart(2, '0')}-${String(dateD).padStart(2, '0')}`
+  }
+
+  const getHoursValue = () => {
+    if (!hours) return 0
+    const val = parseFloat(hours)
+    return hoursUnit === 'days' ? val * 8 : val
   }
 
   const getUserId = async () => {
@@ -196,6 +188,7 @@ export default function Home() {
     setSummary('')
     setPayerName('')
     setHours('')
+    setHoursUnit('hours')
     setLeaveType('annual')
     setReceiptFile(null)
     setReceiptPreview(null)
@@ -232,6 +225,7 @@ export default function Home() {
       status: 'submitted',
       type: formType,
       category: 'other',
+      amount: 0,
     }
 
     if (formType === 'expense') {
@@ -240,13 +234,9 @@ export default function Home() {
     } else if (formType === 'collection') {
       insertPayload.amount = parseFloat(amount)
       insertPayload.payer_name = payerName
-    } else if (formType === 'overtime') {
-      insertPayload.amount = 0
-      insertPayload.hours = parseFloat(hours)
-    } else if (formType === 'leave') {
-      insertPayload.amount = 0
-      insertPayload.hours = parseFloat(hours)
-      insertPayload.leave_type = leaveType
+    } else if (formType === 'overtime' || formType === 'leave') {
+      insertPayload.hours = getHoursValue()
+      if (formType === 'leave') insertPayload.leave_type = leaveType
     }
 
     const { data: inserted, error } = await supabase
@@ -268,11 +258,12 @@ export default function Home() {
     const labelMap: Record<FormType, string> = {
       expense: '費用申請', collection: '代收款項', overtime: '加班申請', leave: '請假申請',
     }
+    const hoursDisplay = hoursUnit === 'days' ? `${hours}天（${getHoursValue()}小時）` : `${hours}小時`
     const extraInfo = formType === 'expense'
       ? `類別：${categoryMap[category]}\n`
       : formType === 'collection' ? `付款人：${payerName}\n`
-      : formType === 'leave' ? `假別：${leaveTypeMap[leaveType]}\n時數：${hours}h\n`
-      : `時數：${hours}h\n`
+      : formType === 'leave' ? `假別：${leaveTypeMap[leaveType]}\n時數：${hoursDisplay}\n`
+      : `時數：${hoursDisplay}\n`
 
     await fetch('/api/notify', {
       method: 'POST',
@@ -332,6 +323,12 @@ export default function Home() {
     expense: '費用申請', collection: '代收款項', overtime: '加班申請', leave: '請假申請',
   }
   const isAttendanceForm = formType === 'overtime' || formType === 'leave'
+
+  const formatHours = (h: number | null) => {
+    if (!h) return '0小時'
+    if (h % 8 === 0) return `${h / 8}天（${h}小時）`
+    return `${h}小時`
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-4">
@@ -421,15 +418,31 @@ export default function Home() {
               {isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">
-                    {formType === 'overtime' ? '加班時數（小時）' : '請假時數（小時）'}
+                    {formType === 'overtime' ? '加班時數' : '請假時數'}
                   </label>
-                  <input type="number" step="0.5" value={hours} onChange={e => setHours(e.target.value)}
-                    placeholder="例：2 或 2.5"
-                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                  {/* 單位切換 */}
+                  <div className="flex bg-gray-100 rounded-lg p-1 mt-1 mb-2">
+                    <button onClick={() => setHoursUnit('hours')}
+                      className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${hoursUnit === 'hours' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
+                      以小時計
+                    </button>
+                    <button onClick={() => setHoursUnit('days')}
+                      className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${hoursUnit === 'days' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
+                      以天計
+                    </button>
+                  </div>
+                  <input type="number" step={hoursUnit === 'hours' ? '0.5' : '0.5'}
+                    value={hours} onChange={e => setHours(e.target.value)}
+                    placeholder={hoursUnit === 'hours' ? '例：2 或 2.5' : '例：1 或 0.5'}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                  {hours && (
+                    <p className="text-xs text-purple-500 mt-1">
+                      = {hoursUnit === 'days' ? `${parseFloat(hours) * 8}小時` : `${parseFloat(hours) / 8}天`}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* 日期：按鈕點選，LINE 瀏覽器相容 */}
               <div>
                 <label className="text-sm text-gray-600 font-medium">
                   {formType === 'expense' ? '費用日期'
@@ -553,7 +566,7 @@ export default function Home() {
                     <p className="text-sm text-gray-500 mb-2">{e.summary}</p>
                     <div className="flex justify-between items-center">
                       {isAttendance ? (
-                        <span className="text-base font-bold text-gray-700">{e.hours} 小時</span>
+                        <span className="text-base font-bold text-gray-700">{formatHours(e.hours)}</span>
                       ) : (
                         <span className="text-base font-bold text-gray-700">
                           NT${Number(e.amount).toLocaleString()}
@@ -563,7 +576,7 @@ export default function Home() {
                     </div>
                     {e.receipt_url && (
                       
-                        <a href={e.receipt_url}
+                       <a href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
