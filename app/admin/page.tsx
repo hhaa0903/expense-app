@@ -48,7 +48,29 @@ type User = {
   is_active: boolean
 }
 
-type AdminTab = 'expenses' | 'attendance' | 'users'
+type JobSite = {
+  id: string
+  name: string
+  address: string
+  lat: number
+  lng: number
+  radius_meters: number
+  is_active: boolean
+}
+
+type AttendanceLog = {
+  id: string
+  user_id: string
+  job_site_id: string
+  type: string
+  lat: number
+  lng: number
+  distance_meters: number
+  clocked_at: string
+  note: string | null
+}
+
+type AdminTab = 'expenses' | 'attendance' | 'clock' | 'users'
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false)
@@ -73,6 +95,22 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [filterUserId, setFilterUserId] = useState<string>('all')
 
+  // 打卡管理
+  const [jobSites, setJobSites] = useState<JobSite[]>([])
+  const [clockLogs, setClockLogs] = useState<AttendanceLog[]>([])
+  const [clockLoading, setClockLoading] = useState(false)
+  const [clockFilterUser, setClockFilterUser] = useState('all')
+  const [clockFilterDate, setClockFilterDate] = useState(new Date().toISOString().split('T')[0])
+  const [clockFilterSite, setClockFilterSite] = useState('all')
+
+  // 新增案場
+  const [showAddSite, setShowAddSite] = useState(false)
+  const [newSiteName, setNewSiteName] = useState('')
+  const [newSiteAddress, setNewSiteAddress] = useState('')
+  const [newSiteLat, setNewSiteLat] = useState('')
+  const [newSiteLng, setNewSiteLng] = useState('')
+  const [newSiteRadius, setNewSiteRadius] = useState('300')
+
   const handleLogin = () => {
     if (inputPw === ADMIN_PASSWORD) { setAuthed(true); setPwError(false) }
     else setPwError(true)
@@ -80,10 +118,7 @@ export default function AdminPage() {
 
   const fetchExpenses = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('submitted_at', { ascending: false })
+    const { data } = await supabase.from('expenses').select('*').order('submitted_at', { ascending: false })
     setExpenses(data || [])
     setLoading(false)
   }
@@ -95,7 +130,29 @@ export default function AdminPage() {
     setUsersLoading(false)
   }
 
-  useEffect(() => { if (authed) { fetchExpenses(); fetchUsers() } }, [authed])
+  const fetchJobSites = async () => {
+    const { data } = await supabase.from('job_sites').select('*').order('name')
+    setJobSites(data || [])
+  }
+
+  const fetchClockLogs = async () => {
+    setClockLoading(true)
+    const { data } = await supabase
+      .from('attendance_logs')
+      .select('*')
+      .order('clocked_at', { ascending: false })
+    setClockLogs(data || [])
+    setClockLoading(false)
+  }
+
+  useEffect(() => {
+    if (authed) {
+      fetchExpenses()
+      fetchUsers()
+      fetchJobSites()
+      fetchClockLogs()
+    }
+  }, [authed])
 
   const markAccounted = async (id: string) => {
     const ref = erpRef[id] || ''
@@ -142,10 +199,7 @@ export default function AdminPage() {
 
   const saveEdit = async (e: Expense) => {
     const isAttendance = e.type === 'overtime' || e.type === 'leave'
-    const payload: Record<string, unknown> = {
-      expense_date: editDate,
-      summary: editSummary,
-    }
+    const payload: Record<string, unknown> = { expense_date: editDate, summary: editSummary }
     if (isAttendance) {
       payload.hours = parseFloat(editHours)
       if (e.type === 'leave') payload.leave_type = editLeaveType
@@ -167,19 +221,97 @@ export default function AdminPage() {
     else fetchUsers()
   }
 
+  const toggleSiteActive = async (site: JobSite) => {
+    const next = !site.is_active
+    if (!confirm(`確定要${next ? '啟用' : '停用'}「${site.name}」嗎？`)) return
+    const { error } = await supabase.from('job_sites').update({ is_active: next }).eq('id', site.id)
+    if (error) alert('操作失敗：' + error.message)
+    else fetchJobSites()
+  }
+
+  const addJobSite = async () => {
+    if (!newSiteName || !newSiteLat || !newSiteLng) {
+      alert('請填寫案場名稱和座標')
+      return
+    }
+    const { error } = await supabase.from('job_sites').insert({
+      name: newSiteName,
+      address: newSiteAddress,
+      lat: parseFloat(newSiteLat),
+      lng: parseFloat(newSiteLng),
+      radius_meters: parseInt(newSiteRadius),
+      is_active: true,
+    })
+    if (error) alert('新增失敗：' + error.message)
+    else {
+      setShowAddSite(false)
+      setNewSiteName('')
+      setNewSiteAddress('')
+      setNewSiteLat('')
+      setNewSiteLng('')
+      setNewSiteRadius('300')
+      fetchJobSites()
+    }
+  }
+
+  const exportClockCSV = () => {
+    const filtered = getFilteredLogs()
+    const rows = [['姓名', '案場', '類型', '打卡時間', '距離(m)']]
+    filtered.forEach(log => {
+      const userName = users.find(u => u.id === log.user_id)?.name || '未知'
+      const siteName = jobSites.find(s => s.id === log.job_site_id)?.name || '未知'
+      rows.push([
+        userName,
+        siteName,
+        log.type === 'clock_in' ? '上班' : '下班',
+        new Date(log.clocked_at).toLocaleString('zh-TW'),
+        String(log.distance_meters),
+      ])
+    })
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `打卡記錄_${clockFilterDate}.csv`
+    a.click()
+  }
+
+  const getFilteredLogs = () => {
+    return clockLogs.filter(log => {
+      const logDate = log.clocked_at.split('T')[0]
+      const dateMatch = clockFilterDate ? logDate === clockFilterDate : true
+      const userMatch = clockFilterUser === 'all' || log.user_id === clockFilterUser
+      const siteMatch = clockFilterSite === 'all' || log.job_site_id === clockFilterSite
+      return dateMatch && userMatch && siteMatch
+    })
+  }
+
+  const getWorkHours = (userId: string, date: string) => {
+    const logs = clockLogs.filter(l =>
+      l.user_id === userId && l.clocked_at.startsWith(date)
+    )
+    const inLog = logs.find(l => l.type === 'clock_in')
+    const outLog = logs.find(l => l.type === 'clock_out')
+    if (!inLog || !outLog) return null
+    const diff = (new Date(outLog.clocked_at).getTime() - new Date(inLog.clocked_at).getTime()) / 1000 / 60 / 60
+    return diff.toFixed(1)
+  }
+
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+
   if (!authed) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-md w-full max-w-sm p-6">
           <h1 className="text-xl font-bold text-gray-800 mb-1">記帳人員後台</h1>
           <p className="text-sm text-gray-400 mb-6">請輸入管理密碼</p>
-          <input
-            type="password" value={inputPw}
+          <input type="password" value={inputPw}
             onChange={e => setInputPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             placeholder="輸入密碼"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-300" />
           {pwError && <p className="text-red-500 text-xs mb-3">密碼錯誤，請再試一次</p>}
           <button onClick={handleLogin}
             className="w-full bg-blue-500 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-600 transition">
@@ -196,16 +328,16 @@ export default function AdminPage() {
   const returnedCollection = expenses.filter(e => e.status === 'accounted' && e.type === 'collection')
   const attendanceAll = expenses.filter(e => e.type === 'overtime' || e.type === 'leave')
   const attendanceFiltered = filterUserId === 'all'
-    ? attendanceAll
-    : attendanceAll.filter(e => e.submitter_id === filterUserId)
+    ? attendanceAll : attendanceAll.filter(e => e.submitter_id === filterUserId)
 
-  // 統計每人時數
   const userHourStats = users.map(u => {
     const records = attendanceAll.filter(e => e.submitter_id === u.id)
     const overtimeHours = records.filter(e => e.type === 'overtime').reduce((s, e) => s + (e.hours || 0), 0)
     const leaveHours = records.filter(e => e.type === 'leave').reduce((s, e) => s + (e.hours || 0), 0)
     return { ...u, overtimeHours, leaveHours }
   }).filter(u => u.overtimeHours > 0 || u.leaveHours > 0)
+
+  const filteredLogs = getFilteredLogs()
 
   const EditCard = ({ e }: { e: Expense }) => {
     const isAttendance = e.type === 'overtime' || e.type === 'leave'
@@ -225,9 +357,9 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-1.5 mt-1">
               {Object.entries(categoryMap).map(([v, l]) => (
                 <button key={v} onClick={() => setEditCategory(v)}
-                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${
-                    editCategory === v ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200'
-                  }`}>{l}</button>
+                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${editCategory === v ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                  {l}
+                </button>
               ))}
             </div>
           </div>
@@ -238,9 +370,9 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-1.5 mt-1">
               {Object.entries(leaveTypeMap).map(([v, l]) => (
                 <button key={v} onClick={() => setEditLeaveType(v)}
-                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${
-                    editLeaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200'
-                  }`}>{l}</button>
+                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${editLeaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                  {l}
+                </button>
               ))}
             </div>
           </div>
@@ -290,7 +422,6 @@ export default function AdminPage() {
       ? isCollection ? 'border-yellow-100' : isAttendance ? 'border-purple-100' : 'border-orange-100'
       : 'border-gray-100'
     const userName = users.find(u => u.id === e.submitter_id)?.name || '未知'
-
     return (
       <div className={`bg-white rounded-xl border ${borderColor} p-4 ${!showActions ? 'opacity-60' : ''}`}>
         <div className="flex justify-between items-start mb-1">
@@ -306,9 +437,7 @@ export default function AdminPage() {
             </span>
             <span className="text-xs text-gray-400 ml-2">{e.expense_date}</span>
           </div>
-          <span className={`text-sm font-bold ${
-            isAttendance ? 'text-purple-600' : isCollection ? 'text-yellow-600' : 'text-orange-500'
-          }`}>
+          <span className={`text-sm font-bold ${isAttendance ? 'text-purple-600' : isCollection ? 'text-yellow-600' : 'text-orange-500'}`}>
             {isAttendance ? `${e.hours}h` : `NT$${Number(e.amount).toLocaleString()}`}
           </span>
         </div>
@@ -364,31 +493,24 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">管理後台</h1>
-        <p className="text-sm text-gray-400 mb-5">費用申請・差勤管理</p>
+        <p className="text-sm text-gray-400 mb-5">費用申請・差勤・打卡管理</p>
 
-        {/* 後台頁籤 */}
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
-          <button onClick={() => setAdminTab('expenses')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              adminTab === 'expenses' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
-            }`}>
-            💸 費用管理
-          </button>
-          <button onClick={() => setAdminTab('attendance')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              adminTab === 'attendance' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
-            }`}>
-            ⏰ 差勤管理
-          </button>
-          <button onClick={() => setAdminTab('users')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              adminTab === 'users' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
-            }`}>
-            👥 員工帳號
-          </button>
+        {/* 頁籤 */}
+        <div className="grid grid-cols-4 gap-1 bg-gray-100 rounded-xl p-1 mb-6">
+          {([
+            { key: 'expenses', label: '💸 費用' },
+            { key: 'attendance', label: '⏰ 差勤' },
+            { key: 'clock', label: '📍 打卡' },
+            { key: 'users', label: '👥 員工' },
+          ] as const).map(t => (
+            <button key={t.key} onClick={() => setAdminTab(t.key)}
+              className={`py-2 rounded-lg text-xs font-medium transition ${adminTab === t.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* ── 費用管理 ── */}
@@ -414,20 +536,17 @@ export default function AdminPage() {
                 </p>
               </div>
             </div>
-
             <h2 className="text-sm font-semibold text-gray-500 mb-3">💸 費用申請 — 待入帳</h2>
             <div className="space-y-3 mb-8">
               {loading && <p className="text-sm text-gray-400">載入中...</p>}
               {!loading && pending.length === 0 && <p className="text-sm text-gray-400">目前沒有待入帳項目 🎉</p>}
               {pending.map(e => <ExpenseCard key={e.id} e={e} showActions={true} />)}
             </div>
-
             <h2 className="text-sm font-semibold text-gray-500 mb-3">💰 代收款項 — 待繳回</h2>
             <div className="space-y-3 mb-8">
               {!loading && pendingCollection.length === 0 && <p className="text-sm text-gray-400">目前沒有待繳回項目 🎉</p>}
               {pendingCollection.map(e => <ExpenseCard key={e.id} e={e} showActions={true} />)}
             </div>
-
             <h2 className="text-sm font-semibold text-gray-500 mb-3">已完成</h2>
             <div className="space-y-2">
               {[...accounted, ...returnedCollection].map(e => <ExpenseCard key={e.id} e={e} showActions={false} />)}
@@ -438,7 +557,6 @@ export default function AdminPage() {
         {/* ── 差勤管理 ── */}
         {adminTab === 'attendance' && (
           <>
-            {/* 統計卡片 */}
             {userHourStats.length > 0 && (
               <div className="mb-6">
                 <h2 className="text-sm font-semibold text-gray-500 mb-3">📊 各員工時數統計</h2>
@@ -453,22 +571,13 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
-
-            {/* 篩選員工 */}
             <div className="mb-4">
-              <select
-                value={filterUserId}
-                onChange={e => setFilterUserId(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-              >
+              <select value={filterUserId} onChange={e => setFilterUserId(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
                 <option value="all">全部員工</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
-
-            {/* 待確認 */}
             <h2 className="text-sm font-semibold text-gray-500 mb-3">⏳ 待確認</h2>
             <div className="space-y-3 mb-8">
               {attendanceFiltered.filter(e => e.status === 'submitted').length === 0 && (
@@ -478,13 +587,149 @@ export default function AdminPage() {
                 <ExpenseCard key={e.id} e={e} showActions={true} />
               ))}
             </div>
-
-            {/* 已確認 */}
             <h2 className="text-sm font-semibold text-gray-500 mb-3">✅ 已確認</h2>
             <div className="space-y-2">
               {attendanceFiltered.filter(e => e.status === 'accounted').map(e => (
                 <ExpenseCard key={e.id} e={e} showActions={false} />
               ))}
+            </div>
+          </>
+        )}
+
+        {/* ── 打卡管理 ── */}
+        {adminTab === 'clock' && (
+          <>
+            {/* 案場管理 */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-semibold text-gray-500">📍 案場管理</h2>
+                <button onClick={() => setShowAddSite(!showAddSite)}
+                  className="text-xs bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition">
+                  + 新增案場
+                </button>
+              </div>
+
+              {showAddSite && (
+                <div className="bg-white rounded-xl border border-blue-200 p-4 mb-3 space-y-3">
+                  <p className="text-xs font-semibold text-blue-500">新增案場</p>
+                  <input placeholder="案場名稱" value={newSiteName} onChange={e => setNewSiteName(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <input placeholder="地址（選填）" value={newSiteAddress} onChange={e => setNewSiteAddress(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <div className="flex gap-2">
+                    <input placeholder="緯度（lat）" value={newSiteLat} onChange={e => setNewSiteLat(e.target.value)}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <input placeholder="經度（lng）" value={newSiteLng} onChange={e => setNewSiteLng(e.target.value)}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">打卡範圍（公尺）</label>
+                    <input type="number" value={newSiteRadius} onChange={e => setNewSiteRadius(e.target.value)}
+                      className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                  <p className="text-xs text-gray-400">💡 緯度經度可用 Google Maps 點右鍵取得</p>
+                  <div className="flex gap-2">
+                    <button onClick={addJobSite}
+                      className="flex-1 bg-blue-500 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-600 transition">
+                      儲存
+                    </button>
+                    <button onClick={() => setShowAddSite(false)}
+                      className="flex-1 bg-gray-100 text-gray-600 rounded-lg py-2 text-sm hover:bg-gray-200 transition">
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {jobSites.map(site => (
+                  <div key={site.id} className={`bg-white rounded-xl border p-3 flex justify-between items-start ${!site.is_active ? 'opacity-50' : ''}`}>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">📍 {site.name}</p>
+                      <p className="text-xs text-gray-400">{site.address}</p>
+                      <p className="text-xs text-gray-400">範圍：{site.radius_meters}m｜{site.lat}, {site.lng}</p>
+                    </div>
+                    <button onClick={() => toggleSiteActive(site)}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${site.is_active ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                      {site.is_active ? '停用' : '啟用'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 打卡記錄 */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-semibold text-gray-500">🕐 打卡記錄</h2>
+                <button onClick={exportClockCSV}
+                  className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition">
+                  📥 匯出 CSV
+                </button>
+              </div>
+
+              {/* 篩選 */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <input type="date" value={clockFilterDate}
+                  onChange={e => setClockFilterDate(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <select value={clockFilterUser} onChange={e => setClockFilterUser(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="all">全部員工</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+                <select value={clockFilterSite} onChange={e => setClockFilterSite(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  <option value="all">全部案場</option>
+                  {jobSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              {/* 工時摘要 */}
+              {clockFilterDate && (
+                <div className="bg-white rounded-xl border p-3 mb-4">
+                  <p className="text-xs text-gray-500 font-medium mb-2">{clockFilterDate} 工時摘要</p>
+                  <div className="space-y-1">
+                    {users.map(u => {
+                      const wh = getWorkHours(u.id, clockFilterDate)
+                      if (!wh) return null
+                      return (
+                        <div key={u.id} className="flex justify-between text-sm">
+                          <span className="text-gray-700">{u.name}</span>
+                          <span className="font-medium text-purple-600">{wh} 小時</span>
+                        </div>
+                      )
+                    })}
+                    {users.every(u => !getWorkHours(u.id, clockFilterDate)) && (
+                      <p className="text-xs text-gray-400">當日無打卡記錄</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {clockLoading && <p className="text-sm text-gray-400">載入中...</p>}
+              <div className="space-y-2">
+                {filteredLogs.map(log => {
+                  const userName = users.find(u => u.id === log.user_id)?.name || '未知'
+                  const siteName = jobSites.find(s => s.id === log.job_site_id)?.name || '未知'
+                  return (
+                    <div key={log.id} className={`bg-white rounded-xl border p-3 flex justify-between items-center ${log.type === 'clock_in' ? 'border-green-100' : 'border-blue-100'}`}>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{log.type === 'clock_in' ? '🟢' : '🔵'}</span>
+                          <span className="text-sm font-medium text-gray-800">{userName}</span>
+                          <span className="text-xs text-gray-400">{log.type === 'clock_in' ? '上班' : '下班'}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">📍 {siteName}・距離 {log.distance_meters}m</p>
+                      </div>
+                      <p className="text-sm font-bold text-gray-700">{formatTime(log.clocked_at)}</p>
+                    </div>
+                  )
+                })}
+                {filteredLogs.length === 0 && !clockLoading && (
+                  <p className="text-sm text-gray-400">沒有符合條件的打卡記錄</p>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -509,11 +754,7 @@ export default function AdminPage() {
                       </p>
                     </div>
                     <button onClick={() => toggleUserActive(u)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                        u.is_active
-                          ? 'bg-red-50 text-red-500 hover:bg-red-100'
-                          : 'bg-green-50 text-green-600 hover:bg-green-100'
-                      }`}>
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${u.is_active ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
                       {u.is_active ? '停用' : '恢復'}
                     </button>
                   </div>
