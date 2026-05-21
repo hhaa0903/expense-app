@@ -40,9 +40,74 @@ type Expense = {
 type TabType = 'form' | 'history'
 type FormType = 'expense' | 'collection' | 'overtime' | 'leave'
 
-const years = Array.from({ length: 6 }, (_, i) => 2023 + i)
-const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
-const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+const currentYear = new Date().getFullYear()
+const years = Array.from({ length: 4 }, (_, i) => currentYear - 1 + i)
+const months = Array.from({ length: 12 }, (_, i) => i + 1)
+const days = Array.from({ length: 31 }, (_, i) => i + 1)
+
+function DatePicker({
+  year, month, day,
+  onYearChange, onMonthChange, onDayChange
+}: {
+  year: number | null, month: number | null, day: number | null,
+  onYearChange: (y: number) => void,
+  onMonthChange: (m: number) => void,
+  onDayChange: (d: number) => void,
+}) {
+  const btnBase = "px-2 py-1.5 rounded-lg text-sm border transition text-center"
+  const active = "bg-blue-500 text-white border-blue-500"
+  const inactive = "bg-white text-gray-600 border-gray-200"
+
+  return (
+    <div className="space-y-2 mt-1">
+      {/* 年 */}
+      <div className="flex gap-1.5 flex-wrap">
+        {years.map(y => (
+          <button
+            key={y}
+            type="button"
+            onClick={() => onYearChange(y)}
+            className={`${btnBase} flex-1 ${year === y ? active : inactive}`}
+          >
+            {y}
+          </button>
+        ))}
+      </div>
+      {/* 月 */}
+      <div className="grid grid-cols-6 gap-1.5">
+        {months.map(m => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onMonthChange(m)}
+            className={`${btnBase} ${month === m ? active : inactive}`}
+          >
+            {m}月
+          </button>
+        ))}
+      </div>
+      {/* 日 */}
+      <div className="grid grid-cols-7 gap-1">
+        {days.map(d => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => onDayChange(d)}
+            className={`${btnBase} text-xs ${day === d ? active : inactive}`}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+      {/* 已選結果 */}
+      {year && month && day && (
+        <p className="text-sm text-blue-600 font-medium">
+          ✓ {year} 年 {month} 月 {day} 日
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function Home() {
   const { data: session, status } = useSession()
@@ -51,9 +116,9 @@ export default function Home() {
   const [formType, setFormType] = useState<FormType>('expense')
 
   const [amount, setAmount] = useState('')
-  const [dateY, setDateY] = useState('')
-  const [dateM, setDateM] = useState('')
-  const [dateD, setDateD] = useState('')
+  const [dateY, setDateY] = useState<number | null>(null)
+  const [dateM, setDateM] = useState<number | null>(null)
+  const [dateD, setDateD] = useState<number | null>(null)
   const [category, setCategory] = useState('transport')
   const [summary, setSummary] = useState('')
   const [payerName, setPayerName] = useState('')
@@ -70,18 +135,16 @@ export default function Home() {
   const [history, setHistory] = useState<Expense[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
-  const getDateString = () =>
-    dateY && dateM && dateD ? `${dateY}-${dateM}-${dateD}` : ''
+  const getDateString = () => {
+    if (!dateY || !dateM || !dateD) return ''
+    return `${dateY}-${String(dateM).padStart(2, '0')}-${String(dateD).padStart(2, '0')}`
+  }
 
   const getUserId = async () => {
     const lineUserId = (session!.user as any).id
     const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('line_user_id', lineUserId)
-      .single()
+      .from('users').select('id').eq('line_user_id', lineUserId).single()
     if (existingUser) return existingUser.id
-
     const { data: newUser } = await supabase
       .from('users')
       .insert({
@@ -90,8 +153,7 @@ export default function Home() {
         role: 'submitter',
         line_user_id: lineUserId,
       })
-      .select('id')
-      .single()
+      .select('id').single()
     return newUser?.id
   }
 
@@ -99,8 +161,7 @@ export default function Home() {
     setHistoryLoading(true)
     const userId = await getUserId()
     const { data } = await supabase
-      .from('expenses')
-      .select('*')
+      .from('expenses').select('*')
       .eq('submitter_id', userId)
       .order('submitted_at', { ascending: false })
     setHistory(data || [])
@@ -129,9 +190,9 @@ export default function Home() {
 
   const resetForm = () => {
     setAmount('')
-    setDateY('')
-    setDateM('')
-    setDateD('')
+    setDateY(null)
+    setDateM(null)
+    setDateD(null)
     setSummary('')
     setPayerName('')
     setHours('')
@@ -145,7 +206,7 @@ export default function Home() {
     const date = getDateString()
 
     if (!date || !summary) {
-      alert('請填寫所有欄位')
+      alert('請填寫所有欄位（包含日期）')
       return
     }
     if ((formType === 'expense' || formType === 'collection') && !amount) {
@@ -189,10 +250,7 @@ export default function Home() {
     }
 
     const { data: inserted, error } = await supabase
-      .from('expenses')
-      .insert(insertPayload)
-      .select('id')
-      .single()
+      .from('expenses').insert(insertPayload).select('id').single()
 
     if (error || !inserted) {
       alert('送出失敗：' + error?.message)
@@ -208,17 +266,12 @@ export default function Home() {
     }
 
     const labelMap: Record<FormType, string> = {
-      expense: '費用申請',
-      collection: '代收款項',
-      overtime: '加班申請',
-      leave: '請假申請',
+      expense: '費用申請', collection: '代收款項', overtime: '加班申請', leave: '請假申請',
     }
     const extraInfo = formType === 'expense'
       ? `類別：${categoryMap[category]}\n`
-      : formType === 'collection'
-      ? `付款人：${payerName}\n`
-      : formType === 'leave'
-      ? `假別：${leaveTypeMap[leaveType]}\n時數：${hours}h\n`
+      : formType === 'collection' ? `付款人：${payerName}\n`
+      : formType === 'leave' ? `假別：${leaveTypeMap[leaveType]}\n時數：${hours}h\n`
       : `時數：${hours}h\n`
 
     await fetch('/api/notify', {
@@ -273,22 +326,12 @@ export default function Home() {
   }
 
   const typeIcon: Record<string, string> = {
-    expense: '💸',
-    collection: '💰',
-    overtime: '⏰',
-    leave: '🏖️',
+    expense: '💸', collection: '💰', overtime: '⏰', leave: '🏖️',
   }
-
   const typeLabelMap: Record<string, string> = {
-    expense: '費用申請',
-    collection: '代收款項',
-    overtime: '加班申請',
-    leave: '請假申請',
+    expense: '費用申請', collection: '代收款項', overtime: '加班申請', leave: '請假申請',
   }
-
   const isAttendanceForm = formType === 'overtime' || formType === 'leave'
-
-  const selectClass = "flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
 
   return (
     <main className="min-h-screen bg-gray-50 p-4">
@@ -302,20 +345,12 @@ export default function Home() {
         </div>
 
         <div className="flex bg-gray-100 rounded-xl p-1 mb-5">
-          <button
-            onClick={() => setTab('form')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              tab === 'form' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
-            }`}
-          >
+          <button onClick={() => setTab('form')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${tab === 'form' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
             📝 新增申請
           </button>
-          <button
-            onClick={() => setTab('history')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              tab === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'
-            }`}
-          >
+          <button onClick={() => setTab('history')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${tab === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>
             📋 我的記錄
           </button>
         </div>
@@ -330,15 +365,12 @@ export default function Home() {
                 { value: 'overtime', label: '⏰ 加班申請', active: 'text-purple-600' },
                 { value: 'leave', label: '🏖️ 請假申請', active: 'text-teal-600' },
               ] as const).map(t => (
-                <button
-                  key={t.value}
-                  onClick={() => setFormType(t.value)}
+                <button key={t.value} onClick={() => setFormType(t.value)}
                   className={`py-2.5 rounded-xl text-sm font-medium border transition ${
                     formType === t.value
                       ? `bg-white ${t.active} border-current shadow-sm`
                       : 'bg-gray-50 text-gray-400 border-transparent'
-                  }`}
-                >
+                  }`}>
                   {t.label}
                 </button>
               ))}
@@ -355,13 +387,9 @@ export default function Home() {
               {formType === 'collection' && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">付款人姓名</label>
-                  <input
-                    type="text"
-                    value={payerName}
-                    onChange={e => setPayerName(e.target.value)}
+                  <input type="text" value={payerName} onChange={e => setPayerName(e.target.value)}
                     placeholder="請輸入付款人姓名"
-                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300"
-                  />
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
                 </div>
               )}
 
@@ -370,15 +398,10 @@ export default function Home() {
                   <label className="text-sm text-gray-600 font-medium">假別</label>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {Object.entries(leaveTypeMap).map(([v, l]) => (
-                      <button
-                        key={v}
-                        onClick={() => setLeaveType(v)}
+                      <button key={v} onClick={() => setLeaveType(v)}
                         className={`px-3 py-1 rounded-full text-sm border transition ${
-                          leaveType === v
-                            ? 'bg-teal-500 text-white border-teal-500'
-                            : 'bg-white text-gray-500 border-gray-200'
-                        }`}
-                      >
+                          leaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200'
+                        }`}>
                         {l}
                       </button>
                     ))}
@@ -389,13 +412,9 @@ export default function Home() {
               {!isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">金額（NT$）</label>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
+                  <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
                     placeholder="請輸入金額"
-                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
               )}
 
@@ -404,39 +423,25 @@ export default function Home() {
                   <label className="text-sm text-gray-600 font-medium">
                     {formType === 'overtime' ? '加班時數（小時）' : '請假時數（小時）'}
                   </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={hours}
-                    onChange={e => setHours(e.target.value)}
+                  <input type="number" step="0.5" value={hours} onChange={e => setHours(e.target.value)}
                     placeholder="例：2 或 2.5"
-                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-                  />
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
                 </div>
               )}
 
-              {/* 日期：三個下拉選單，手機相容 */}
+              {/* 日期：按鈕點選，LINE 瀏覽器相容 */}
               <div>
                 <label className="text-sm text-gray-600 font-medium">
                   {formType === 'expense' ? '費用日期'
                     : formType === 'collection' ? '收款日期'
-                    : formType === 'overtime' ? '加班日期'
-                    : '請假日期'}
+                    : formType === 'overtime' ? '加班日期' : '請假日期'}
                 </label>
-                <div className="flex gap-2 mt-1">
-                  <select value={dateY} onChange={e => setDateY(e.target.value)} className={selectClass}>
-                    <option value="">年</option>
-                    {years.map(y => <option key={y} value={String(y)}>{y}</option>)}
-                  </select>
-                  <select value={dateM} onChange={e => setDateM(e.target.value)} className={selectClass}>
-                    <option value="">月</option>
-                    {months.map(m => <option key={m} value={m}>{Number(m)}月</option>)}
-                  </select>
-                  <select value={dateD} onChange={e => setDateD(e.target.value)} className={selectClass}>
-                    <option value="">日</option>
-                    {days.map(d => <option key={d} value={d}>{Number(d)}日</option>)}
-                  </select>
-                </div>
+                <DatePicker
+                  year={dateY} month={dateM} day={dateD}
+                  onYearChange={setDateY}
+                  onMonthChange={setDateM}
+                  onDayChange={setDateD}
+                />
               </div>
 
               {formType === 'expense' && (
@@ -452,15 +457,12 @@ export default function Home() {
                       { value: 'hardware', label: '五金' },
                       { value: 'other', label: '其他' },
                     ].map(c => (
-                      <button
-                        key={c.value}
-                        onClick={() => setCategory(c.value)}
+                      <button key={c.value} onClick={() => setCategory(c.value)}
                         className={`px-3 py-1 rounded-full text-sm border transition ${
                           category === c.value
                             ? 'bg-blue-500 text-white border-blue-500'
                             : 'bg-white text-gray-500 border-gray-200'
-                        }`}
-                      >
+                        }`}>
                         {c.label}
                       </button>
                     ))}
@@ -472,71 +474,49 @@ export default function Home() {
                 <label className="text-sm text-gray-600 font-medium">
                   {isAttendanceForm ? '事由說明' : '摘要說明'}
                 </label>
-                <textarea
-                  value={summary}
-                  onChange={e => setSummary(e.target.value)}
+                <textarea value={summary} onChange={e => setSummary(e.target.value)}
                   placeholder={
                     formType === 'expense' ? '請簡述費用用途'
                       : formType === 'collection' ? '請簡述代收原因'
-                      : formType === 'overtime' ? '請簡述加班事由'
-                      : '請簡述請假事由'
+                      : formType === 'overtime' ? '請簡述加班事由' : '請簡述請假事由'
                   }
                   rows={3}
-                  className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+                  className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
 
               {!isAttendanceForm && (
                 <div>
                   <label className="text-sm text-gray-600 font-medium">收據照片（選填）</label>
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-blue-300 transition"
-                  >
+                  <div onClick={() => fileInputRef.current?.click()}
+                    className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-blue-300 transition">
                     {receiptPreview ? (
-                      <img
-                        src={receiptPreview}
-                        alt="收據預覽"
-                        className="max-h-40 mx-auto rounded-lg object-contain"
-                      />
+                      <img src={receiptPreview} alt="收據預覽" className="max-h-40 mx-auto rounded-lg object-contain" />
                     ) : (
                       <p className="text-sm text-gray-400">📷 點此上傳收據照片</p>
                     )}
                   </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                    onChange={handleFileChange} className="hidden" />
                   {receiptFile && (
-                    <button
-                      onClick={() => { setReceiptFile(null); setReceiptPreview(null) }}
-                      className="mt-1 text-xs text-red-400 hover:text-red-600"
-                    >
+                    <button onClick={() => { setReceiptFile(null); setReceiptPreview(null) }}
+                      className="mt-1 text-xs text-red-400 hover:text-red-600">
                       ✕ 移除照片
                     </button>
                   )}
                 </div>
               )}
 
-              <button
-                onClick={handleSubmit}
-                disabled={loading}
+              <button onClick={handleSubmit} disabled={loading}
                 className={`w-full text-white rounded-lg py-3 text-sm font-medium transition disabled:opacity-50 ${
                   formType === 'expense' ? 'bg-blue-500 hover:bg-blue-600'
                     : formType === 'collection' ? 'bg-yellow-500 hover:bg-yellow-600'
                     : formType === 'overtime' ? 'bg-purple-500 hover:bg-purple-600'
                     : 'bg-teal-500 hover:bg-teal-600'
-                }`}
-              >
+                }`}>
                 {loading ? '送出中...' : `送出${
                   formType === 'expense' ? '費用申請'
                     : formType === 'collection' ? '代收款項'
-                    : formType === 'overtime' ? '加班申請'
-                    : '請假申請'
+                    : formType === 'overtime' ? '加班申請' : '請假申請'
                 }`}
               </button>
             </div>
@@ -545,9 +525,7 @@ export default function Home() {
 
         {tab === 'history' && (
           <div>
-            {historyLoading && (
-              <p className="text-sm text-gray-400 text-center py-8">載入中...</p>
-            )}
+            {historyLoading && <p className="text-sm text-gray-400 text-center py-8">載入中...</p>}
             {!historyLoading && history.length === 0 && (
               <p className="text-sm text-gray-400 text-center py-8">目前還沒有申請記錄</p>
             )}
@@ -581,13 +559,11 @@ export default function Home() {
                           NT${Number(e.amount).toLocaleString()}
                         </span>
                       )}
-                      {e.erp_ref_no && (
-                        <span className="text-xs text-green-500">#{e.erp_ref_no}</span>
-                      )}
+                      {e.erp_ref_no && <span className="text-xs text-green-500">#{e.erp_ref_no}</span>}
                     </div>
                     {e.receipt_url && (
                       
-                       <a href={e.receipt_url}
+                        <a href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
