@@ -578,7 +578,7 @@ export default function Home() {
                     </div>
                     {e.receipt_url && (
                       
-                        href={e.receipt_url}
+                        <a href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
