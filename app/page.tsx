@@ -144,7 +144,6 @@ export default function Home() {
   const [history, setHistory] = useState<Expense[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
-  // 打卡
   const [jobSites, setJobSites] = useState<JobSite[]>([])
   const [selectedSite, setSelectedSite] = useState<JobSite | null>(null)
   const [todayLogs, setTodayLogs] = useState<AttendanceLog[]>([])
@@ -606,7 +605,7 @@ export default function Home() {
                     </div>
                     {e.receipt_url && (
                       
-                        href={e.receipt_url}
+                        <a href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
@@ -624,8 +623,6 @@ export default function Home() {
         {/* ── 打卡 ── */}
         {tab === 'clock' && (
           <div className="space-y-4">
-
-            {/* 今日狀態 */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <p className="text-xs text-gray-400 font-medium mb-3">今日打卡狀態</p>
               <div className="flex gap-3">
@@ -650,7 +647,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 選擇案場 */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <p className="text-sm text-gray-600 font-medium mb-3">選擇案場</p>
               <div className="space-y-2">
@@ -668,7 +664,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 定位打卡 */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <p className="text-sm text-gray-600 font-medium mb-3">取得位置並打卡</p>
               <button onClick={locateMe} disabled={locating}
@@ -707,7 +702,6 @@ export default function Home() {
                 </button>
               </div>
             </div>
-
           </div>
         )}
 
