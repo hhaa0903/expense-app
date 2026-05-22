@@ -95,7 +95,6 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [filterUserId, setFilterUserId] = useState<string>('all')
 
-  // 打卡管理
   const [jobSites, setJobSites] = useState<JobSite[]>([])
   const [clockLogs, setClockLogs] = useState<AttendanceLog[]>([])
   const [clockLoading, setClockLoading] = useState(false)
@@ -103,7 +102,6 @@ export default function AdminPage() {
   const [clockFilterDate, setClockFilterDate] = useState(new Date().toISOString().split('T')[0])
   const [clockFilterSite, setClockFilterSite] = useState('all')
 
-  // 新增案場
   const [showAddSite, setShowAddSite] = useState(false)
   const [newSiteName, setNewSiteName] = useState('')
   const [newSiteAddress, setNewSiteAddress] = useState('')
@@ -137,44 +135,33 @@ export default function AdminPage() {
 
   const fetchClockLogs = async () => {
     setClockLoading(true)
-    const { data } = await supabase
-      .from('attendance_logs')
-      .select('*')
-      .order('clocked_at', { ascending: false })
+    const { data } = await supabase.from('attendance_logs').select('*').order('clocked_at', { ascending: false })
     setClockLogs(data || [])
     setClockLoading(false)
   }
 
   useEffect(() => {
-    if (authed) {
-      fetchExpenses()
-      fetchUsers()
-      fetchJobSites()
-      fetchClockLogs()
-    }
+    if (authed) { fetchExpenses(); fetchUsers(); fetchJobSites(); fetchClockLogs() }
   }, [authed])
 
   const markAccounted = async (id: string) => {
     const ref = erpRef[id] || ''
     const { error } = await supabase.from('expenses')
-      .update({ status: 'accounted', erp_ref_no: ref, accounted_at: new Date().toISOString() })
-      .eq('id', id)
+      .update({ status: 'accounted', erp_ref_no: ref, accounted_at: new Date().toISOString() }).eq('id', id)
     if (error) alert('更新失敗：' + error.message)
     else fetchExpenses()
   }
 
   const markReturned = async (id: string) => {
     const { error } = await supabase.from('expenses')
-      .update({ status: 'accounted', returned_at: new Date().toISOString() })
-      .eq('id', id)
+      .update({ status: 'accounted', returned_at: new Date().toISOString() }).eq('id', id)
     if (error) alert('更新失敗：' + error.message)
     else fetchExpenses()
   }
 
   const markConfirmed = async (id: string) => {
     const { error } = await supabase.from('expenses')
-      .update({ status: 'accounted', accounted_at: new Date().toISOString() })
-      .eq('id', id)
+      .update({ status: 'accounted', accounted_at: new Date().toISOString() }).eq('id', id)
     if (error) alert('更新失敗：' + error.message)
     else fetchExpenses()
   }
@@ -221,6 +208,13 @@ export default function AdminPage() {
     else fetchUsers()
   }
 
+  const deleteUser = async (user: User) => {
+    if (!confirm(`確定要刪除「${user.name}」嗎？刪除後無法復原。`)) return
+    const { error } = await supabase.from('users').delete().eq('id', user.id)
+    if (error) alert('刪除失敗：' + error.message)
+    else fetchUsers()
+  }
+
   const toggleSiteActive = async (site: JobSite) => {
     const next = !site.is_active
     if (!confirm(`確定要${next ? '啟用' : '停用'}「${site.name}」嗎？`)) return
@@ -229,27 +223,24 @@ export default function AdminPage() {
     else fetchJobSites()
   }
 
+  const deleteJobSite = async (site: JobSite) => {
+    if (!confirm(`確定要刪除「${site.name}」嗎？刪除後無法復原。`)) return
+    const { error } = await supabase.from('job_sites').delete().eq('id', site.id)
+    if (error) alert('刪除失敗：' + error.message)
+    else fetchJobSites()
+  }
+
   const addJobSite = async () => {
-    if (!newSiteName || !newSiteLat || !newSiteLng) {
-      alert('請填寫案場名稱和座標')
-      return
-    }
+    if (!newSiteName || !newSiteLat || !newSiteLng) { alert('請填寫案場名稱和座標'); return }
     const { error } = await supabase.from('job_sites').insert({
-      name: newSiteName,
-      address: newSiteAddress,
-      lat: parseFloat(newSiteLat),
-      lng: parseFloat(newSiteLng),
-      radius_meters: parseInt(newSiteRadius),
-      is_active: true,
+      name: newSiteName, address: newSiteAddress,
+      lat: parseFloat(newSiteLat), lng: parseFloat(newSiteLng),
+      radius_meters: parseInt(newSiteRadius), is_active: true,
     })
     if (error) alert('新增失敗：' + error.message)
     else {
       setShowAddSite(false)
-      setNewSiteName('')
-      setNewSiteAddress('')
-      setNewSiteLat('')
-      setNewSiteLng('')
-      setNewSiteRadius('300')
+      setNewSiteName(''); setNewSiteAddress(''); setNewSiteLat(''); setNewSiteLng(''); setNewSiteRadius('300')
       fetchJobSites()
     }
   }
@@ -260,13 +251,8 @@ export default function AdminPage() {
     filtered.forEach(log => {
       const userName = users.find(u => u.id === log.user_id)?.name || '未知'
       const siteName = jobSites.find(s => s.id === log.job_site_id)?.name || '未知'
-      rows.push([
-        userName,
-        siteName,
-        log.type === 'clock_in' ? '上班' : '下班',
-        new Date(log.clocked_at).toLocaleString('zh-TW'),
-        String(log.distance_meters),
-      ])
+      rows.push([userName, siteName, log.type === 'clock_in' ? '上班' : '下班',
+        new Date(log.clocked_at).toLocaleString('zh-TW'), String(log.distance_meters)])
     })
     const csv = rows.map(r => r.join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -277,25 +263,20 @@ export default function AdminPage() {
     a.click()
   }
 
-  const getFilteredLogs = () => {
-    return clockLogs.filter(log => {
-      const logDate = log.clocked_at.split('T')[0]
-      const dateMatch = clockFilterDate ? logDate === clockFilterDate : true
-      const userMatch = clockFilterUser === 'all' || log.user_id === clockFilterUser
-      const siteMatch = clockFilterSite === 'all' || log.job_site_id === clockFilterSite
-      return dateMatch && userMatch && siteMatch
-    })
-  }
+  const getFilteredLogs = () => clockLogs.filter(log => {
+    const logDate = log.clocked_at.split('T')[0]
+    const dateMatch = clockFilterDate ? logDate === clockFilterDate : true
+    const userMatch = clockFilterUser === 'all' || log.user_id === clockFilterUser
+    const siteMatch = clockFilterSite === 'all' || log.job_site_id === clockFilterSite
+    return dateMatch && userMatch && siteMatch
+  })
 
   const getWorkHours = (userId: string, date: string) => {
-    const logs = clockLogs.filter(l =>
-      l.user_id === userId && l.clocked_at.startsWith(date)
-    )
+    const logs = clockLogs.filter(l => l.user_id === userId && l.clocked_at.startsWith(date))
     const inLog = logs.find(l => l.type === 'clock_in')
     const outLog = logs.find(l => l.type === 'clock_out')
     if (!inLog || !outLog) return null
-    const diff = (new Date(outLog.clocked_at).getTime() - new Date(inLog.clocked_at).getTime()) / 1000 / 60 / 60
-    return diff.toFixed(1)
+    return ((new Date(outLog.clocked_at).getTime() - new Date(inLog.clocked_at).getTime()) / 3600000).toFixed(1)
   }
 
   const formatTime = (iso: string) =>
@@ -498,7 +479,6 @@ export default function AdminPage() {
         <h1 className="text-2xl font-bold text-gray-800 mb-1">管理後台</h1>
         <p className="text-sm text-gray-400 mb-5">費用申請・差勤・打卡管理</p>
 
-        {/* 頁籤 */}
         <div className="grid grid-cols-4 gap-1 bg-gray-100 rounded-xl p-1 mb-6">
           {([
             { key: 'expenses', label: '💸 費用' },
@@ -599,7 +579,6 @@ export default function AdminPage() {
         {/* ── 打卡管理 ── */}
         {adminTab === 'clock' && (
           <>
-            {/* 案場管理 */}
             <div className="mb-6">
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-sm font-semibold text-gray-500">📍 案場管理</h2>
@@ -649,16 +628,23 @@ export default function AdminPage() {
                       <p className="text-xs text-gray-400">{site.address}</p>
                       <p className="text-xs text-gray-400">範圍：{site.radius_meters}m｜{site.lat}, {site.lng}</p>
                     </div>
-                    <button onClick={() => toggleSiteActive(site)}
-                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${site.is_active ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
-                      {site.is_active ? '停用' : '啟用'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => toggleSiteActive(site)}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${site.is_active ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                        {site.is_active ? '停用' : '啟用'}
+                      </button>
+                      {!site.is_active && (
+                        <button onClick={() => deleteJobSite(site)}
+                          className="text-xs px-3 py-1.5 rounded-lg font-medium bg-red-100 text-red-600 hover:bg-red-200 transition">
+                          🗑 刪除
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* 打卡記錄 */}
             <div>
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-sm font-semibold text-gray-500">🕐 打卡記錄</h2>
@@ -668,7 +654,6 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              {/* 篩選 */}
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <input type="date" value={clockFilterDate}
                   onChange={e => setClockFilterDate(e.target.value)}
@@ -685,7 +670,6 @@ export default function AdminPage() {
                 </select>
               </div>
 
-              {/* 工時摘要 */}
               {clockFilterDate && (
                 <div className="bg-white rounded-xl border p-3 mb-4">
                   <p className="text-xs text-gray-500 font-medium mb-2">{clockFilterDate} 工時摘要</p>
@@ -753,10 +737,18 @@ export default function AdminPage() {
                         </span>
                       </p>
                     </div>
-                    <button onClick={() => toggleUserActive(u)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${u.is_active ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
-                      {u.is_active ? '停用' : '恢復'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => toggleUserActive(u)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${u.is_active ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
+                        {u.is_active ? '停用' : '恢復'}
+                      </button>
+                      {!u.is_active && (
+                        <button onClick={() => deleteUser(u)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-100 text-red-600 hover:bg-red-200 transition">
+                          🗑 刪除
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
