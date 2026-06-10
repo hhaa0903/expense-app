@@ -64,6 +64,8 @@ const years = [currentYear, currentYear + 1]
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 const days = Array.from({ length: 31 }, (_, i) => i + 1)
 
+const inputClass = "mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+
 function DatePicker({ year, month, day, onYearChange, onMonthChange, onDayChange }: {
   year: number | null, month: number | null, day: number | null,
   onYearChange: (y: number) => void,
@@ -72,7 +74,7 @@ function DatePicker({ year, month, day, onYearChange, onMonthChange, onDayChange
 }) {
   const btnBase = "py-1.5 rounded-lg text-sm border transition text-center"
   const active = "bg-blue-500 text-white border-blue-500"
-  const inactive = "bg-white text-gray-600 border-gray-200"
+  const inactive = "bg-white text-gray-700 border-gray-200"
   return (
     <div className="space-y-2 mt-1">
       <div className="flex gap-2">
@@ -401,7 +403,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 頁籤 */}
         <div className="grid grid-cols-3 gap-1 bg-gray-100 rounded-xl p-1 mb-5">
           {([
             { key: 'form', label: '📝 新增申請' },
@@ -444,7 +445,7 @@ export default function Home() {
                   <label className="text-sm text-gray-600 font-medium">付款人姓名</label>
                   <input type="text" value={payerName} onChange={e => setPayerName(e.target.value)}
                     placeholder="請輸入付款人姓名"
-                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-300" />
+                    className={inputClass + " focus:ring-yellow-300"} />
                 </div>
               )}
 
@@ -454,7 +455,7 @@ export default function Home() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {Object.entries(leaveTypeMap).map(([v, l]) => (
                       <button key={v} onClick={() => setLeaveType(v)}
-                        className={`px-3 py-1 rounded-full text-sm border transition ${leaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                        className={`px-3 py-1 rounded-full text-sm border transition ${leaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-600 border-gray-200'}`}>
                         {l}
                       </button>
                     ))}
@@ -467,7 +468,7 @@ export default function Home() {
                   <label className="text-sm text-gray-600 font-medium">金額（NT$）</label>
                   <input type="number" value={amount} onChange={e => setAmount(e.target.value)}
                     placeholder="請輸入金額"
-                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className={inputClass} />
                 </div>
               )}
 
@@ -488,7 +489,7 @@ export default function Home() {
                   </div>
                   <input type="number" step="0.5" value={hours} onChange={e => setHours(e.target.value)}
                     placeholder={hoursUnit === 'hours' ? '例：2 或 2.5' : '例：1 或 0.5'}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                    className={inputClass + " focus:ring-purple-300"} />
                   {hours && (
                     <p className="text-xs text-purple-500 mt-1">
                       = {hoursUnit === 'days' ? `${parseFloat(hours) * 8}小時` : `${parseFloat(hours) / 8}天`}
@@ -519,7 +520,7 @@ export default function Home() {
                       { value: 'other', label: '其他' },
                     ].map(c => (
                       <button key={c.value} onClick={() => setCategory(c.value)}
-                        className={`px-3 py-1 rounded-full text-sm border transition ${category === c.value ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                        className={`px-3 py-1 rounded-full text-sm border transition ${category === c.value ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200'}`}>
                         {c.label}
                       </button>
                     ))}
@@ -534,7 +535,7 @@ export default function Home() {
                 <textarea value={summary} onChange={e => setSummary(e.target.value)}
                   placeholder={formType === 'expense' ? '請簡述費用用途' : formType === 'collection' ? '請簡述代收原因' : formType === 'overtime' ? '請簡述加班事由' : '請簡述請假事由'}
                   rows={3}
-                  className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className={inputClass} />
               </div>
 
               {!isAttendanceForm && (
@@ -596,7 +597,7 @@ export default function Home() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sl.color}`}>{sl.text}</span>
                     </div>
                     <p className="text-xs text-gray-400 mb-1">{e.expense_date}</p>
-                    <p className="text-sm text-gray-500 mb-2">{e.summary}</p>
+                    <p className="text-sm text-gray-600 mb-2">{e.summary}</p>
                     <div className="flex justify-between items-center">
                       {isAttendance
                         ? <span className="text-base font-bold text-gray-700">{formatHours(e.hours)}</span>
@@ -605,7 +606,7 @@ export default function Home() {
                     </div>
                     {e.receipt_url && (
                       
-                        <a href={e.receipt_url}
+                       <a  href={e.receipt_url}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-2 block text-xs text-blue-400 hover:underline"
@@ -667,7 +668,7 @@ export default function Home() {
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <p className="text-sm text-gray-600 font-medium mb-3">取得位置並打卡</p>
               <button onClick={locateMe} disabled={locating}
-                className="w-full border border-gray-200 text-gray-600 rounded-xl py-3 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 mb-3">
+                className="w-full border border-gray-200 text-gray-700 rounded-xl py-3 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 mb-3">
                 {locating ? '定位中...' : '📡 取得目前位置'}
               </button>
 
