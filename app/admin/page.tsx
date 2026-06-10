@@ -22,6 +22,9 @@ const leaveTypeMap: Record<string, string> = {
 
 const ADMIN_PASSWORD = 'expense2024'
 
+const inputClass = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+const inputSmClass = "mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300"
+
 type Expense = {
   id: string
   amount: number
@@ -292,7 +295,7 @@ export default function AdminPage() {
             onChange={e => setInputPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             placeholder="輸入密碼"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-300" />
           {pwError && <p className="text-red-500 text-xs mb-3">密碼錯誤，請再試一次</p>}
           <button onClick={handleLogin}
             className="w-full bg-blue-500 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-600 transition">
@@ -328,8 +331,7 @@ export default function AdminPage() {
         {e.type === 'collection' && (
           <div>
             <label className="text-xs text-gray-500">付款人</label>
-            <input value={editPayerName} onChange={ev => setEditPayerName(ev.target.value)}
-              className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            <input value={editPayerName} onChange={ev => setEditPayerName(ev.target.value)} className={inputSmClass} />
           </div>
         )}
         {e.type === 'expense' && (
@@ -338,7 +340,7 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-1.5 mt-1">
               {Object.entries(categoryMap).map(([v, l]) => (
                 <button key={v} onClick={() => setEditCategory(v)}
-                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${editCategory === v ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${editCategory === v ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-200'}`}>
                   {l}
                 </button>
               ))}
@@ -351,7 +353,7 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-1.5 mt-1">
               {Object.entries(leaveTypeMap).map(([v, l]) => (
                 <button key={v} onClick={() => setEditLeaveType(v)}
-                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${editLeaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-500 border-gray-200'}`}>
+                  className={`px-2.5 py-0.5 rounded-full text-xs border transition ${editLeaveType === v ? 'bg-teal-500 text-white border-teal-500' : 'bg-white text-gray-600 border-gray-200'}`}>
                   {l}
                 </button>
               ))}
@@ -362,24 +364,22 @@ export default function AdminPage() {
           <div>
             <label className="text-xs text-gray-500">時數</label>
             <input type="number" step="0.5" value={editHours} onChange={ev => setEditHours(ev.target.value)}
-              className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300" />
+              className={inputSmClass + " focus:ring-purple-300"} />
           </div>
         ) : (
           <div>
             <label className="text-xs text-gray-500">金額</label>
-            <input type="number" value={editAmount} onChange={ev => setEditAmount(ev.target.value)}
-              className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            <input type="number" value={editAmount} onChange={ev => setEditAmount(ev.target.value)} className={inputSmClass} />
           </div>
         )}
         <div>
           <label className="text-xs text-gray-500">日期</label>
-          <input type="date" value={editDate} onChange={ev => setEditDate(ev.target.value)}
-            className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          <input type="date" value={editDate} onChange={ev => setEditDate(ev.target.value)} className={inputSmClass} />
         </div>
         <div>
           <label className="text-xs text-gray-500">說明</label>
           <textarea value={editSummary} onChange={ev => setEditSummary(ev.target.value)} rows={2}
-            className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            className={inputSmClass} />
         </div>
         <div className="flex gap-2">
           <button onClick={() => saveEdit(e)}
@@ -423,7 +423,7 @@ export default function AdminPage() {
           </span>
         </div>
         <p className="text-xs text-blue-400 mb-1">👤 {userName}</p>
-        <p className="text-sm text-gray-500 mb-2">{e.summary}</p>
+        <p className="text-sm text-gray-600 mb-2">{e.summary}</p>
         {e.receipt_url && (
           <a href={e.receipt_url} target="_blank" rel="noreferrer"
             className="mb-2 block text-xs text-blue-400 hover:underline">
@@ -438,7 +438,7 @@ export default function AdminPage() {
                 <input type="text" placeholder="ERP 傳票編號（選填）"
                   value={erpRef[e.id] || ''}
                   onChange={ev => setErpRef(prev => ({ ...prev, [e.id]: ev.target.value }))}
-                  className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-green-300" />
                 <button onClick={() => markAccounted(e.id)}
                   className="bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-600 transition">
                   ✓ 已入帳
@@ -553,7 +553,7 @@ export default function AdminPage() {
             )}
             <div className="mb-4">
               <select value={filterUserId} onChange={e => setFilterUserId(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-300">
                 <option value="all">全部員工</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
@@ -591,20 +591,17 @@ export default function AdminPage() {
               {showAddSite && (
                 <div className="bg-white rounded-xl border border-blue-200 p-4 mb-3 space-y-3">
                   <p className="text-xs font-semibold text-blue-500">新增案場</p>
-                  <input placeholder="案場名稱" value={newSiteName} onChange={e => setNewSiteName(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                  <input placeholder="地址（選填）" value={newSiteAddress} onChange={e => setNewSiteAddress(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <input placeholder="案場名稱" value={newSiteName} onChange={e => setNewSiteName(e.target.value)} className={inputClass} />
+                  <input placeholder="地址（選填）" value={newSiteAddress} onChange={e => setNewSiteAddress(e.target.value)} className={inputClass} />
                   <div className="flex gap-2">
                     <input placeholder="緯度（lat）" value={newSiteLat} onChange={e => setNewSiteLat(e.target.value)}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300" />
                     <input placeholder="經度（lng）" value={newSiteLng} onChange={e => setNewSiteLng(e.target.value)}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300" />
                   </div>
                   <div>
                     <label className="text-xs text-gray-500">打卡範圍（公尺）</label>
-                    <input type="number" value={newSiteRadius} onChange={e => setNewSiteRadius(e.target.value)}
-                      className="mt-0.5 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <input type="number" value={newSiteRadius} onChange={e => setNewSiteRadius(e.target.value)} className={inputClass} />
                   </div>
                   <p className="text-xs text-gray-400">💡 緯度經度可用 Google Maps 點右鍵取得</p>
                   <div className="flex gap-2">
@@ -657,14 +654,14 @@ export default function AdminPage() {
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <input type="date" value={clockFilterDate}
                   onChange={e => setClockFilterDate(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 <select value={clockFilterUser} onChange={e => setClockFilterUser(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300">
                   <option value="all">全部員工</option>
                   {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
                 <select value={clockFilterSite} onChange={e => setClockFilterSite(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  className="border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300">
                   <option value="all">全部案場</option>
                   {jobSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
